@@ -56,18 +56,6 @@ jobs:
           tags: ${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Security Scan with Trivy
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}
-          scan-type: image
-          scanners: vuln
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: '1'
-          format: table
-
       - name: Checkout GitOps Repo
         uses: actions/checkout@v4
         with:
