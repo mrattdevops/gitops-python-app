@@ -32,3 +32,10 @@ def test_info():
 
     assert response.status_code == 200
     assert "hostname" in response.json
+
+def test_cpu_load():
+    client = app.test_client()
+    response = client.get("/api/load")
+
+    assert response.status_code == 200
+    assert response.json["status"] == "completed"

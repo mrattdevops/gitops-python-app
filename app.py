@@ -35,6 +35,18 @@ def info():
         "version": os.getenv("APP_VERSION", "dev")
     })
 
+@app.get("/api/load")
+def cpu_load():
+    total = 0
+
+    for i in range(500_000):
+        total += (i * i) % 97
+
+    return jsonify({
+        "status": "completed",
+        "result": total,
+        "hostname": socket.gethostname()
+    })
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
