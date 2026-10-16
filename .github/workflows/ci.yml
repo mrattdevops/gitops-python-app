@@ -15,7 +15,7 @@ concurrency:
 
 env:
   IMAGE_REPO: docker.io/mrattdevops/gitops-advanced-app
-  CONFIG_REPO: mrattdevops/gitops-advanced-deployment
+  CONFIG_REPO: mrattdevops/gitops-python-deployment
   DEV_VALUES: environments/dev/values.yaml
 
 jobs:
