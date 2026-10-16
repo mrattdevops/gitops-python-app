@@ -1,0 +1,133 @@
+
+name: Advanced GitOps CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: advanced-gitops-dev
+  cancel-in-progress: false
+
+env:
+  IMAGE_REPO: docker.io/mrattdevops/gitops-advanced-app
+  CONFIG_REPO: mrattdevops/gitops-advanced-deployment
+  DEV_VALUES: environments/dev/values.yaml
+
+jobs:
+  build-and-update-dev:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Application
+        uses: actions/checkout@v4
+
+      - name: Run Python Tests
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pytest -v
+
+      - name: Prepare Image Tag
+        run: |
+          echo "IMAGE_TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Set Up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set Up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Security Scan with Trivy
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}
+          scan-type: image
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+      - name: Checkout GitOps Repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CONFIG_REPO }}
+          token: ${{ secrets.CONFIG_REPO_TOKEN }}
+          ref: main
+          path: gitops-repo
+
+      - name: Install yq
+        run: |
+          curl -fsSL \
+            https://github.com/mikefarah/yq/releases/download/v4.45.4/yq_linux_amd64 \
+            -o /tmp/yq
+          sudo install -m 0755 /tmp/yq /usr/local/bin/yq
+
+      - name: Update Dev Image Tag
+        run: |
+          cd gitops-repo
+
+          export IMAGE_TAG IMAGE_REPO
+
+          yq -i '
+            .image.repository = strenv(IMAGE_REPO) |
+            .image.tag = strenv(IMAGE_TAG)
+          ' "$DEV_VALUES"
+
+          echo "Updated dev values:"
+          cat "$DEV_VALUES"
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.3
+
+      - name: Validate Dev Helm Chart
+        run: |
+          cd gitops-repo
+
+          helm lint charts/python-api \
+            -f "$DEV_VALUES"
+
+          helm template python-api-dev charts/python-api \
+            -n gitops-dev \
+            -f "$DEV_VALUES" \
+            > /tmp/rendered-dev.yaml
+
+      - name: Commit and Push GitOps Update
+        run: |
+          cd gitops-repo
+
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add "$DEV_VALUES"
+
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+
+          git commit -m "deploy(dev): $IMAGE_TAG"
+          git push origin HEAD:main
