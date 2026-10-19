@@ -15,11 +15,13 @@ import application_config
 
 app = Flask(__name__)
 
+
 HTTP_REQUESTS = Counter(
     "http_requests",
     "Total HTTP requests received by the application",
-    ["method", "endpoint", "status"],
+    ["method", "route", "status"],
 )
+
 
 @app.errorhandler(application_config.ConfigurationError)
 def configuration_error(_error):
@@ -80,11 +82,17 @@ if __name__ == "__main__":
 
 @app.after_request
 def count_http_requests(response):
-    # Do not count Prometheus scrapes as application traffic.
-    if request.endpoint != "metrics":
+    excluded_routes = {
+        "metrics",
+        "liveness",
+        "readiness",
+        "static",
+    }
+
+    if request.endpoint not in excluded_routes:
         HTTP_REQUESTS.labels(
             method=request.method,
-            endpoint=request.endpoint or "unknown",
+            route=request.endpoint or "unknown",
             status=str(response.status_code),
         ).inc()
 
