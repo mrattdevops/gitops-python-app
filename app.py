@@ -3,6 +3,7 @@ import os
 import socket
 
 from flask import Flask, jsonify
+from vault_config import get_application_config, VAULT_CONFIG_FILE
 
 app = Flask(__name__)
 
@@ -29,11 +30,18 @@ def readiness():
 
 @app.get("/api/info")
 def info():
+    config = get_application_config()
+
     return jsonify({
         "hostname": socket.gethostname(),
-        "environment": os.getenv("APP_ENV", "local"),
-        "version": os.getenv("APP_VERSION", "dev")
+        "environment": config.get(
+            "APP_ENV",
+            os.getenv("APP_ENV", "local")
+        ),
+        "version": os.getenv("APP_VERSION", "dev"),
+        "vault_config_loaded": VAULT_CONFIG_FILE.is_file()
     })
+
 
 @app.get("/api/load")
 def cpu_load():
