@@ -12,7 +12,7 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py vault_config.py ./
+COPY app.py application_config.py ./
 
 USER appuser
 

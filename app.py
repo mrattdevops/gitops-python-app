@@ -3,9 +3,15 @@ import os
 import socket
 
 from flask import Flask, jsonify
-from vault_config import get_application_config, VAULT_CONFIG_FILE
+
+import application_config
 
 app = Flask(__name__)
+
+
+@app.errorhandler(application_config.ConfigurationError)
+def configuration_error(_error):
+    return jsonify({"error": "Application configuration is unavailable."}), 503
 
 
 @app.get("/")
@@ -25,12 +31,13 @@ def liveness():
 
 @app.get("/health/ready")
 def readiness():
+    application_config.get_application_config()
     return jsonify({"status": "ready"}), 200
 
 
 @app.get("/api/info")
 def info():
-    config = get_application_config()
+    config = application_config.get_application_config()
 
     return jsonify({
         "hostname": socket.gethostname(),
@@ -39,7 +46,7 @@ def info():
             os.getenv("APP_ENV", "local")
         ),
         "version": os.getenv("APP_VERSION", "dev"),
-        "vault_config_loaded": VAULT_CONFIG_FILE.is_file()
+        "vault_config_loaded": application_config.CONFIG_FILE.is_file()
     })
 
 
