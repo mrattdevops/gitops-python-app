@@ -97,3 +97,12 @@ def test_cpu_load():
 
     assert response.status_code == 200
     assert response.json["status"] == "completed"
+
+def test_prometheus_metrics():
+    client = app.test_client()
+
+    client.get("/api/info")
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert b"http_requests_total" in response.data

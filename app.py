@@ -2,12 +2,24 @@
 import os
 import socket
 
+from flask import Response, request
+from prometheus_client import (
+    Counter,
+    CONTENT_TYPE_LATEST,
+    generate_latest,
+)
+
 from flask import Flask, jsonify
 
 import application_config
 
 app = Flask(__name__)
 
+HTTP_REQUESTS = Counter(
+    "http_requests",
+    "Total HTTP requests received by the application",
+    ["method", "endpoint", "status"],
+)
 
 @app.errorhandler(application_config.ConfigurationError)
 def configuration_error(_error):
@@ -65,3 +77,23 @@ def cpu_load():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
+@app.after_request
+def count_http_requests(response):
+    # Do not count Prometheus scrapes as application traffic.
+    if request.endpoint != "metrics":
+        HTTP_REQUESTS.labels(
+            method=request.method,
+            endpoint=request.endpoint or "unknown",
+            status=str(response.status_code),
+        ).inc()
+
+    return response
+
+
+@app.get("/metrics")
+def metrics():
+    return Response(
+        generate_latest(),
+        mimetype=CONTENT_TYPE_LATEST,
+    )
